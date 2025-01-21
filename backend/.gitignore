@@ -1,0 +1,4 @@
+config/credentials.json
+config/listen-together.json
+.env
+node_modules
