@@ -17,15 +17,25 @@ interface SocketContextProviderProps {
 export const SocketContextProvider: React.FC<SocketContextProviderProps> = ({
   children,
 }) => {
-  const socket: Socket<ServerToClientEvents, ClientToServerEvents> = useMemo(
-    () => io("localhost:3000"),
-    []
-  );
+  const [socket, setSocket] = React.useState<Socket | null>(null);
+
   useEffect(() => {
+    // const socketInstance = io('http://localhost:3000');
+    const socketInstance = io('http://192.168.4.185:3000');
+     
+    socketInstance.on('connect', () => {
+      console.log('Socket connected successfully', socketInstance.id);
+    });
+    
+    socketInstance.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+    
+    setSocket(socketInstance);
     return () => {
-      socket.disconnect();
+      socketInstance.disconnect();
     };
-  }, [socket]);
+  }, []);
   return (
     <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
   );

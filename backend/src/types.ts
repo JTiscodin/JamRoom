@@ -4,12 +4,18 @@ interface playerStateUpdateMessage {
 }
 
 export interface ServerToClientEvents {
-  changeMusic: (musicTitle: string) => void;
+  musicChanged: (musicId: string) => void;
+  error: (message: string) => void;
+  playerStateUpdate: (message: playerStateUpdateMessage) => void;
+  roomCreated: (roomId: string) => void;
+  roomJoined: (roomId: string) => void;
 }
 
 export interface ClientToServerEvents {
   createRoom: (roomName: string) => void;
-  joinRoom: (roomName: string) => void;
+  joinRoom: (roomId: string) => void;
+  updatePlayerState: (state: PlayerState) => void;
+  changeMusic : (musicId : string) => void;
 }
 
 interface songChange {

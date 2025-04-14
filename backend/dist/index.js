@@ -38,24 +38,58 @@ const io = new socket_io_1.Server(httpServer, {
 const Rooms = new Map();
 io.on("connection", (socket) => {
     console.log(socket.id, "connected");
-    socket.on("createRoom", (roomName) => {
+    socket.on("createRoom", roomName => {
+        console.log("recieved createRoom request: ", roomName);
         const room = new Room_1.Room(socket, roomName, io);
-        Rooms.set(roomName, room);
+        Rooms.set(room.id, room);
+        socket.emit("roomCreated", room.id);
+    });
+    socket.on("joinRoom", (roomId) => {
+        const room = Rooms.get(roomId);
+        if (room) {
+            room.joinRoom(socket);
+            socket.emit("roomJoined", room.name);
+        }
+        else {
+            socket.emit("error", "Room not found");
+        }
+    });
+    socket.on("changeMusic", (musicId) => {
+        const room = Rooms.get(Array.from(socket.rooms)[1]);
+        if (room && room.host.id === socket.id) {
+            console.log("changing music in room", room.id, "to", musicId);
+            room.changeMusic(musicId);
+        }
     });
     socket.on("disconnect", () => {
         console.log("disconnected " + socket.id);
     });
 });
-app.use(express_1.default.static("assets"));
-app.get("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    let { songid } = req.query;
+app.get("/list-files", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        if (songid === "1") {
-            // Google Drive file
-            const fileId = "1pjxXcag5rvGxxBlCiMz42TjuFJICo5nT";
+        const response = yield drive.files.list({
+            q: "'1SOpU6NL8ihWPqD0KIyIGxqa0YWP2_dwt' in parents and trashed = false",
+            fields: "files(id, name, mimeType)",
+            spaces: "drive",
+        });
+        const files = response.data.files;
+        if (!files || files.length === 0) {
+            return res.status(404).send("No files found.");
+        }
+        res.status(200).json(files);
+    }
+    catch (error) {
+        console.error("Error listing files:", error);
+        res.status(500).send("Failed to list files");
+    }
+}));
+app.get("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    let { songId } = req.query;
+    try {
+        if (songId) {
             // Get file metadata
             const file = yield drive.files.get({
-                fileId: fileId,
+                fileId: songId,
                 fields: "size",
             });
             const fileSize = Number(file.data.size);
@@ -65,6 +99,7 @@ app.get("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 const start = parseInt(parts[0], 10);
                 const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
                 const chunksize = end - start + 1;
+                console.log("range requested", start, end, chunksize);
                 res.writeHead(206, {
                     "Content-Range": `bytes ${start}-${end}/${fileSize}`,
                     "Accept-Ranges": "bytes",
@@ -72,15 +107,20 @@ app.get("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     "Content-Type": "audio/mpeg",
                 });
                 const stream = yield drive.files.get({
-                    fileId: fileId,
+                    fileId: songId,
                     alt: "media",
+                }, {
+                    responseType: "stream",
                     headers: {
                         Range: `bytes=${start}-${end}`,
                     },
-                }, {
-                    responseType: "stream",
                 });
-                stream.data.pipe(res);
+                if (stream && "data" in stream) {
+                    stream.data.pipe(res);
+                }
+                else {
+                    throw new Error("Invalid stream response");
+                }
             }
             else {
                 res.writeHead(200, {
@@ -88,11 +128,17 @@ app.get("/", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     "Content-Type": "audio/mpeg",
                 });
                 const stream = yield drive.files.get({
-                    fileId: fileId,
+                    fileId: songId,
                     alt: "media",
                 }, {
                     responseType: "stream",
                 });
+                if (stream && "data" in stream) {
+                    stream.data.pipe(res);
+                }
+                else {
+                    throw new Error("Invalid stream response");
+                }
                 stream.data.pipe(res);
             }
         }

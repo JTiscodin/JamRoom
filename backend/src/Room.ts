@@ -1,33 +1,35 @@
 import { Server, Socket } from "socket.io";
+import { v4 as uuid } from "uuid";
 import {
   ClientToServerEvents,
   PlayerState,
-  ServerEvents,
   ServerToClientEvents,
 } from "./types";
 
 export class Room {
+  public id: string;
   public host: Socket;
   public name: string;
-  private musicTitle: string | null;
+  private musicId: string | null;
   public currrentState: PlayerState;
   private members: Set<string>;
   private io: Server<ClientToServerEvents, ServerToClientEvents>;
 
   constructor(host: Socket, name: string, io: Server) {
+    this.id = uuid();
     this.host = host;
     this.name = name;
     this.members = new Set();
-    this.musicTitle = null;
+    this.musicId = null;
     this.io = io;
     this.currrentState = PlayerState.PAUSED;
     //Adding the host to the members list.
     this.joinRoom(host);
   }
 
-  changeMusic(musicTitle: string) {
-    this.musicTitle = musicTitle;
-    this.io.to(this.name).emit("changeMusic", musicTitle);
+  changeMusic(musicId: string) {
+    this.musicId = musicId;
+    this.io.to(this.id).emit("musicChanged", musicId);
   }
 
   joinRoom(member: Socket) {
@@ -36,15 +38,11 @@ export class Room {
       return;
     }
     this.members.add(member.id);
-    member.join(this.name);
+    member.join(this.id);
   }
 
   leaveRoom(member: Socket) {
-    if (this.members.has(member.id)) {
-      this.members.delete(member.id);
-      member.leave(this.name);
-    } else {
-      console.log("No such member found");
-    }
+    this.members.delete(member.id);
+    member.leave(this.id);
   }
 }
